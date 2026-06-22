@@ -1,0 +1,31 @@
+{
+  "name": "@frani/auth-next",
+  "version": "0.1.0",
+  "description": "Route handlers e helpers Next.js para Frani Auth SDK",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0"
+  },
+  "dependencies": {
+    "@frani/auth-sdk": "0.1.0"
+  },
+  "sideEffects": false,
+  "license": "MIT"
+}
