@@ -1,3 +1,13 @@
+function getWebCrypto(): Crypto {
+  const webCrypto = globalThis.crypto;
+  if (!webCrypto?.subtle) {
+    throw new Error(
+      'Web Crypto indisponível. Use HTTPS ou localhost para iniciar OAuth PKCE.',
+    );
+  }
+  return webCrypto;
+}
+
 function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = '';
@@ -7,12 +17,12 @@ function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
 
 async function sha256(plain: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
-  return crypto.subtle.digest('SHA-256', encoder.encode(plain));
+  return getWebCrypto().subtle.digest('SHA-256', encoder.encode(plain));
 }
 
 function generateRandomString(length: number): string {
   const array = new Uint8Array(length);
-  crypto.getRandomValues(array);
+  getWebCrypto().getRandomValues(array);
   return base64UrlEncode(array);
 }
 
@@ -24,8 +34,9 @@ export async function generatePkce(): Promise<{ codeVerifier: string; codeChalle
 }
 
 export function generateOAuthState(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
+  const webCrypto = globalThis.crypto;
+  if (webCrypto && 'randomUUID' in webCrypto) {
+    return webCrypto.randomUUID();
   }
   return generateRandomString(16);
 }
