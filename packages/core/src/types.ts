@@ -117,6 +117,8 @@ export interface FraniAuthConfig {
   scopes?: string;
   /** Proxy local para troca de tokens (default: /api/oauth/token) */
   tokenProxyUrl?: string;
+  /** Proxy local para refresh token (default: /api/oauth/refresh) */
+  refreshProxyUrl?: string;
   /** Proxy local para config pública (default: /api/config) */
   configProxyUrl?: string;
 }

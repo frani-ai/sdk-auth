@@ -46,6 +46,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
 
 export class FraniAuthClient {
   private readonly tokenProxyUrl: string;
+  private readonly refreshProxyUrl: string;
   private readonly configProxyUrl: string;
   private cachedPublicConfig: Pick<FraniAuthConfig, 'authApiUrl' | 'clientId' | 'redirectUri'> | null = null;
 
@@ -54,6 +55,7 @@ export class FraniAuthClient {
     private readonly storage: TokenStorage = createSessionStorageAdapter(),
   ) {
     this.tokenProxyUrl = config.tokenProxyUrl ?? '/api/oauth/token';
+    this.refreshProxyUrl = config.refreshProxyUrl ?? '/api/oauth/refresh';
     this.configProxyUrl = config.configProxyUrl ?? '/api/config';
   }
 
@@ -185,21 +187,35 @@ export class FraniAuthClient {
     const token = refreshToken ?? this.storage.getTokens()?.refresh_token;
     if (!token) throw new FraniAuthError('Refresh token em falta');
 
-    const cfg = await this.resolveApiConfig();
-    const res = await fetch(`${cfg.authApiUrl}/oauth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'refresh_token',
-        refresh_token: token,
-        client_id: cfg.clientId,
-        ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
-      }),
-    });
+    let tokens: TokenSet;
+    if (this.refreshProxyUrl) {
+      const res = await fetch(this.refreshProxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: token }),
+      });
+      tokens = await parseResponse<TokenSet>(res);
+    } else {
+      const cfg = await this.resolveApiConfig();
+      const res = await fetch(`${cfg.authApiUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'refresh_token',
+          refresh_token: token,
+          client_id: cfg.clientId,
+          ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
+        }),
+      });
+      tokens = await parseResponse<TokenSet>(res);
+    }
 
-    const tokens = await parseResponse<TokenSet>(res);
-    this.storage.setTokens(tokens);
-    return tokens;
+    const merged: TokenSet = {
+      ...tokens,
+      refresh_token: tokens.refresh_token ?? token,
+    };
+    this.storage.setTokens(merged);
+    return merged;
   }
 
   async introspectToken(token?: string): Promise<TokenIntrospection> {

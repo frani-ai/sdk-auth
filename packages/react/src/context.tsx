@@ -34,6 +34,7 @@ export interface FraniAuthContextValue {
   error: string | null;
   setTenantId: (tenantId: string | undefined) => void;
   refreshUser: () => Promise<UserInfo | null>;
+  refreshSession: () => Promise<TokenSet | null>;
   startOAuthLogin: (tenantId?: string) => Promise<void>;
   handleOAuthCallback: (searchParams: URLSearchParams) => Promise<{ tokens: TokenSet; user: UserInfo }>;
   login: (payload: LoginCredentials) => Promise<LoginResult>;
@@ -65,7 +66,7 @@ export function FraniAuthProvider({
   const client = useMemo(
     () => new FraniAuthClient({ ...config, tenantId: initialTenantId ?? config.tenantId }, storage ?? createSessionStorageAdapter()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [config.authApiUrl, config.clientId, config.redirectUri, config.tokenProxyUrl, config.configProxyUrl],
+    [config.authApiUrl, config.clientId, config.redirectUri, config.tokenProxyUrl, config.refreshProxyUrl, config.configProxyUrl],
   );
 
   const [tenantId, setTenantId] = useState<string | undefined>(initialTenantId ?? config.tenantId);
@@ -92,6 +93,26 @@ export function FraniAuthProvider({
     }).finally(() => setIsLoading(false));
   }, [autoLoadAppConfig, loadAppConfig]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<TokenSet>).detail;
+      if (detail?.access_token) setTokens(detail);
+    };
+    window.addEventListener('frani-auth-tokens-refreshed', handler);
+    return () => window.removeEventListener('frani-auth-tokens-refreshed', handler);
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    if (!client.getStoredTokens()?.refresh_token) return null;
+    try {
+      const newTokens = await client.refreshTokens();
+      setTokens(newTokens);
+      return newTokens;
+    } catch {
+      return null;
+    }
+  }, [client]);
+
   const refreshUser = useCallback(async () => {
     if (!client.getStoredTokens()?.access_token) {
       setUser(null);
@@ -103,8 +124,17 @@ export function FraniAuthProvider({
       setUser(info);
       return info;
     } catch {
-      setUser(null);
-      return null;
+      try {
+        const newTokens = await client.refreshTokens();
+        setTokens(newTokens);
+        const info = await client.fetchUserInfo(newTokens.access_token);
+        client.setStoredUser(info);
+        setUser(info);
+        return info;
+      } catch {
+        setUser(null);
+        return null;
+      }
     }
   }, [client]);
 
@@ -194,6 +224,7 @@ export function FraniAuthProvider({
       error,
       setTenantId,
       refreshUser,
+      refreshSession,
       startOAuthLogin,
       handleOAuthCallback,
       login,
@@ -213,6 +244,7 @@ export function FraniAuthProvider({
       isLoading,
       error,
       refreshUser,
+      refreshSession,
       startOAuthLogin,
       handleOAuthCallback,
       login,
