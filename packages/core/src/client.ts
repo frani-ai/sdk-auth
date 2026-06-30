@@ -48,7 +48,10 @@ export class FraniAuthClient {
   private readonly tokenProxyUrl: string;
   private readonly refreshProxyUrl: string;
   private readonly configProxyUrl: string;
-  private cachedPublicConfig: Pick<FraniAuthConfig, 'authApiUrl' | 'clientId' | 'redirectUri'> | null = null;
+  private cachedPublicConfig: Pick<
+    FraniAuthConfig,
+    'authApiUrl' | 'oauthPublicUrl' | 'clientId' | 'redirectUri'
+  > | null = null;
 
   constructor(
     private readonly config: FraniAuthConfig,
@@ -64,12 +67,15 @@ export class FraniAuthClient {
   }
 
   /** Config pública (clientId, redirectUri, authApiUrl) — via proxy ou env inline. */
-  async getPublicConfig(): Promise<Pick<FraniAuthConfig, 'authApiUrl' | 'clientId' | 'redirectUri'>> {
+  async getPublicConfig(): Promise<
+    Pick<FraniAuthConfig, 'authApiUrl' | 'oauthPublicUrl' | 'clientId' | 'redirectUri'>
+  > {
     if (this.cachedPublicConfig) return this.cachedPublicConfig;
 
     if (this.config.authApiUrl && this.config.clientId && this.config.redirectUri) {
       this.cachedPublicConfig = {
         authApiUrl: this.config.authApiUrl,
+        oauthPublicUrl: this.config.oauthPublicUrl,
         clientId: this.config.clientId,
         redirectUri: this.config.redirectUri,
       };
@@ -103,8 +109,17 @@ export class FraniAuthClient {
   async getAuthorizeUrl(codeChallenge: string, state?: string, tenantId?: string): Promise<string> {
     const cfg = await this.resolveApiConfig();
     const oauthState = state ?? this.generateState();
+    const authorizeBase = (this.config.oauthPublicUrl ?? cfg.oauthPublicUrl ?? cfg.authApiUrl).replace(
+      /\/$/,
+      '',
+    );
     return buildAuthorizeUrl(
-      { ...cfg, scopes: this.config.scopes, tenantId: tenantId ?? this.config.tenantId },
+      {
+        ...cfg,
+        authApiUrl: authorizeBase,
+        scopes: this.config.scopes,
+        tenantId: tenantId ?? this.config.tenantId,
+      },
       { state: oauthState, codeChallenge, tenantId: tenantId ?? this.config.tenantId },
     );
   }
@@ -439,10 +454,13 @@ export class FraniAuthClient {
     return parseJwt<T>(token);
   }
 
-  private async resolveApiConfig(): Promise<Pick<FraniAuthConfig, 'authApiUrl' | 'clientId' | 'redirectUri'>> {
+  private async resolveApiConfig(): Promise<
+    Pick<FraniAuthConfig, 'authApiUrl' | 'oauthPublicUrl' | 'clientId' | 'redirectUri'>
+  > {
     if (this.config.authApiUrl && this.config.clientId && this.config.redirectUri) {
       return {
         authApiUrl: this.config.authApiUrl.replace(/\/$/, ''),
+        oauthPublicUrl: this.config.oauthPublicUrl?.replace(/\/$/, ''),
         clientId: this.config.clientId,
         redirectUri: this.config.redirectUri,
       };
@@ -450,6 +468,7 @@ export class FraniAuthClient {
     const publicCfg = await this.getPublicConfig();
     return {
       authApiUrl: publicCfg.authApiUrl.replace(/\/$/, ''),
+      oauthPublicUrl: publicCfg.oauthPublicUrl?.replace(/\/$/, ''),
       clientId: publicCfg.clientId,
       redirectUri: publicCfg.redirectUri,
     };
@@ -502,6 +521,7 @@ export async function exchangeCodeOnServer(
 export function getPublicConfigFromServer(config: ServerAuthConfig) {
   return {
     authApiUrl: config.authApiUrl,
+    ...(config.oauthPublicUrl ? { oauthPublicUrl: config.oauthPublicUrl } : {}),
     clientId: config.clientId,
     redirectUri: config.redirectUri,
     tenantId: config.tenantId,

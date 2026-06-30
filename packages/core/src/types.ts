@@ -108,6 +108,11 @@ export interface PkceState {
 export interface FraniAuthConfig {
   /** Base da API, ex.: https://api.frani.com.br/authenticate */
   authApiUrl: string;
+  /**
+   * URL pública do OAuth no browser (onde o cookie SSO existe).
+   * Ex.: https://identity.frani.com.br/api — quando omitido, usa authApiUrl.
+   */
+  oauthPublicUrl?: string;
   clientId: string;
   /** Apenas no servidor — nunca expor no browser */
   clientSecret?: string;
@@ -125,6 +130,7 @@ export interface FraniAuthConfig {
 
 export interface ServerAuthConfig {
   authApiUrl: string;
+  oauthPublicUrl?: string;
   clientId: string;
   clientSecret: string;
   redirectUri: string;

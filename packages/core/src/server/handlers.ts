@@ -35,7 +35,19 @@ export function readAuthConfigFromEnv(env: EnvReader = DEFAULT_ENV): ServerAuthC
   const tenantId =
     env('TENANT_ID') ?? env('NEXT_PUBLIC_TENANT_ID') ?? env('VITE_TENANT_ID');
 
-  return { authApiUrl, clientId, clientSecret, redirectUri, tenantId };
+  const oauthPublicUrl =
+    env('OAUTH_PUBLIC_URL') ??
+    env('NEXT_PUBLIC_OAUTH_PUBLIC_URL') ??
+    env('VITE_OAUTH_PUBLIC_URL');
+
+  return {
+    authApiUrl,
+    ...(oauthPublicUrl ? { oauthPublicUrl } : {}),
+    clientId,
+    clientSecret,
+    redirectUri,
+    tenantId,
+  };
 }
 
 /** Handler fetch-compatible para POST /api/oauth/token */
