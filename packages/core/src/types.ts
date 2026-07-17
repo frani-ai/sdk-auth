@@ -82,6 +82,7 @@ export interface ConsentInfo {
   privacyUrl?: string;
   lgpdUrl?: string;
   crossApp?: boolean;
+  crossTenant?: boolean;
   homeAppName?: string;
   groupName?: string;
   dataScopes?: { key: string; required: boolean }[];

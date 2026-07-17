@@ -368,39 +368,42 @@ export class FraniAuthClient {
     });
   }
 
-  async getConsentInfo(userId?: string): Promise<ConsentInfo> {
+  async getConsentInfo(userId?: string, tenantId?: string): Promise<ConsentInfo> {
     const cfg = await this.resolveApiConfig();
     const params = new URLSearchParams({ client_id: cfg.clientId });
     if (userId) params.set('user_id', userId);
+    if (tenantId) params.set('tenant_id', tenantId);
     const res = await fetch(`${cfg.authApiUrl}/auth/consent/info?${params.toString()}`, {
       credentials: 'include',
     });
     return parseResponse<ConsentInfo>(res);
   }
 
-  async checkConsent(userId: string): Promise<{ hasConsented: boolean }> {
+  async checkConsent(userId: string, tenantId?: string): Promise<{ hasConsented: boolean }> {
     const cfg = await this.resolveApiConfig();
     const params = new URLSearchParams({ clientId: cfg.clientId, userId });
+    if (tenantId) params.set('tenantId', tenantId);
     const res = await fetch(`${cfg.authApiUrl}/auth/consent/check?${params.toString()}`, {
       credentials: 'include',
     });
     return parseResponse(res);
   }
 
-  async giveConsent(userId: string): Promise<{ success: boolean }> {
+  async giveConsent(userId: string, tenantId?: string): Promise<{ success: boolean }> {
     const cfg = await this.resolveApiConfig();
     const res = await fetch(`${cfg.authApiUrl}/auth/consent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ clientId: cfg.clientId, userId }),
+      body: JSON.stringify({ clientId: cfg.clientId, userId, tenantId }),
     });
     return parseResponse(res);
   }
 
-  async checkSsoSession(): Promise<SsoSession> {
+  async checkSsoSession(tenantId?: string): Promise<SsoSession> {
     const cfg = await this.resolveApiConfig();
     const params = new URLSearchParams({ client_id: cfg.clientId });
+    if (tenantId) params.set('tenant_id', tenantId);
     const res = await fetch(`${cfg.authApiUrl}/auth/sso/session?${params.toString()}`, {
       credentials: 'include',
     });
