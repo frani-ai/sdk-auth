@@ -1,0 +1,72 @@
+name: Release
+
+# Bump sincronizado (core/react/next) + commit + tag → dispara Publish.
+# Ex.: 0.1.0 → patch → 0.1.1 (chore(release): v0.1.1 + tag v0.1.1)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Tipo de bump semântico'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Bump version & tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        run: |
+          VERSION=$(node scripts/bump-version.mjs "${{ inputs.bump }}")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Nova versão: $VERSION"
+
+      - name: Commit and tag
+        run: |
+          VERSION="${{ steps.bump.outputs.version }}"
+          git add \
+            package.json \
+            package-lock.json \
+            packages/core/package.json \
+            packages/react/package.json \
+            packages/next/package.json
+          git commit -m "chore(release): v${VERSION}"
+          git tag "v${VERSION}"
+
+      - name: Push commit and tag
+        run: |
+          git push origin HEAD
+          git push origin "v${{ steps.bump.outputs.version }}"

@@ -219,3 +219,18 @@ await client.revokeToken();
 npm install
 npm run build
 ```
+
+## Release / publish
+
+Publicação no GitHub Packages com bump sincronizado (`auth-sdk`, `auth-react`, `auth-next`):
+
+1. Actions → **Release** → Run workflow (branch `main`/`master`)
+2. Escolhe `patch` (0.1.0 → 0.1.1), `minor` ou `major`
+3. Commit `chore(release): vX.Y.Z` + tag `vX.Y.Z`
+4. A tag dispara **Publish** dos três packages
+
+Local (só bump):
+
+```bash
+npm run version:patch   # ou version:minor / version:major
+```
