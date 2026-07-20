@@ -1,5 +1,5 @@
 {
-  "name": "@frani/auth-sdk",
+  "name": "@frani-ai/auth-sdk",
   "version": "0.1.0",
   "description": "SDK Frani Auth — OAuth PKCE, login, tenant e config de aplicação",
   "type": "module",
@@ -22,12 +22,25 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frani-ai/sdk-auth.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "sideEffects": false,
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

@@ -6,18 +6,43 @@ SDK para integrar aplicações **Next.js** e **React (Vite)** com o Frani Auth P
 
 | Pacote | Descrição |
 |--------|-----------|
-| `@frani/auth-sdk` | Cliente HTTP, PKCE, login, tenant, tokens |
-| `@frani/auth-react` | Provider React + hooks |
-| `@frani/auth-next` | Route handlers App Router |
-| `@frani/auth-react/vite` | Plugin Vite (proxy dev para token exchange) |
+| `@frani-ai/auth-sdk` | Cliente HTTP, PKCE, login, tenant, tokens |
+| `@frani-ai/auth-react` | Provider React + hooks |
+| `@frani-ai/auth-next` | Route handlers App Router |
+| `@frani-ai/auth-react/vite` | Plugin Vite (proxy dev para token exchange) |
 
-## Instalação
+## Instalação (GitHub Packages)
+
+Pacotes públicos no GitHub Packages (`@frani-ai`).
+
+1. No projecto consumidor, cria/atualiza `.npmrc`:
+
+```ini
+@frani-ai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
+
+2. Autentica com um PAT que tenha `read:packages` (mesmo em pacotes públicos o registry GitHub pode pedir auth):
 
 ```bash
-npm install @frani/auth-sdk @frani/auth-react
+export NODE_AUTH_TOKEN=ghp_seu_token
+npm install @frani-ai/auth-sdk @frani-ai/auth-react
 # Next.js
-npm install @frani/auth-next
+npm install @frani-ai/auth-next
 ```
+
+## Publicar (maintainers)
+
+```bash
+# 1. Bump / commit
+# 2. Tag e push
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+Ou: Actions → **Publish to GitHub Packages** → Run workflow (opcional dry-run).
+
+Ordem de publicação: `auth-sdk` → `auth-react` → `auth-next`.
 
 ## Variáveis de ambiente
 
@@ -39,14 +64,14 @@ TENANT_ID=                      # opcional — slug/id do tenant
 
 ```ts
 // app/api/oauth/token/route.ts
-import { createTokenExchangeHandler } from '@frani/auth-next';
+import { createTokenExchangeHandler } from '@frani-ai/auth-next';
 
 export const { dynamic, POST } = createTokenExchangeHandler();
 ```
 
 ```ts
 // app/api/config/route.ts
-import { createPublicConfigHandler } from '@frani/auth-next';
+import { createPublicConfigHandler } from '@frani-ai/auth-next';
 
 export const { dynamic, GET } = createPublicConfigHandler();
 ```
@@ -57,7 +82,7 @@ export const { dynamic, GET } = createPublicConfigHandler();
 // app/providers.tsx
 'use client';
 
-import { FraniAuthProvider } from '@frani/auth-react';
+import { FraniAuthProvider } from '@frani-ai/auth-react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -80,7 +105,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 ```tsx
 'use client';
-import { useFraniAuth } from '@frani/auth-react';
+import { useFraniAuth } from '@frani-ai/auth-react';
 
 export function LoginButton() {
   const { startOAuthLogin } = useFraniAuth();
@@ -92,7 +117,7 @@ export function LoginButton() {
 'use client';
 import { useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useFraniAuth } from '@frani/auth-react';
+import { useFraniAuth } from '@frani-ai/auth-react';
 
 export default function CallbackPage() {
   const params = useSearchParams();
@@ -110,7 +135,7 @@ export default function CallbackPage() {
 ### 4. Tenant
 
 ```tsx
-import { useFraniTenant } from '@frani/auth-react';
+import { useFraniTenant } from '@frani-ai/auth-react';
 
 function TenantSelector() {
   const { tenantId, setTenantId, tenantEnabled } = useFraniTenant();
@@ -135,7 +160,7 @@ function TenantSelector() {
 // vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { franiAuthVitePlugin } from '@frani/auth-react/vite';
+import { franiAuthVitePlugin } from '@frani-ai/auth-react/vite';
 
 export default defineConfig({
   plugins: [react(), franiAuthVitePlugin()],
@@ -150,10 +175,10 @@ Igual ao Next.js — usa `FraniAuthProvider` com `tokenProxyUrl: '/api/oauth/tok
 
 ---
 
-## API do cliente (`@frani/auth-sdk`)
+## API do cliente (`@frani-ai/auth-sdk`)
 
 ```ts
-import { FraniAuthClient } from '@frani/auth-sdk';
+import { FraniAuthClient } from '@frani-ai/auth-sdk';
 
 const client = new FraniAuthClient({
   authApiUrl: 'https://api.frani.com.br/authenticate',

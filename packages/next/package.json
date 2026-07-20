@@ -1,5 +1,5 @@
 {
-  "name": "@frani/auth-next",
+  "name": "@frani-ai/auth-next",
   "version": "0.1.0",
   "description": "Route handlers e helpers Next.js para Frani Auth SDK",
   "type": "module",
@@ -18,14 +18,30 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frani-ai/sdk-auth.git",
+    "directory": "packages/next"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "peerDependencies": {
     "next": ">=14.0.0"
   },
   "dependencies": {
-    "@frani/auth-sdk": "0.1.0"
+    "@frani-ai/auth-sdk": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
   },
   "sideEffects": false,
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
 }

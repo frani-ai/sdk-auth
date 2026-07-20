@@ -1,0 +1,87 @@
+name: Publish to GitHub Packages
+
+on:
+  # Push de tag v* (ex.: git tag v0.1.1 && git push origin v0.1.1)
+  push:
+    tags:
+      - 'v*'
+  # Publicação manual (Actions → Run workflow)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (não publica de fato)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@frani-ai'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Sync version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Publishing version: $VERSION"
+          for pkg in packages/core packages/react packages/next; do
+            npm version "$VERSION" --prefix "$pkg" --no-git-tag-version --allow-same-version
+          done
+          VERSION="$VERSION" node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            for (const dir of ["packages/react", "packages/next"]) {
+              const path = dir + "/package.json";
+              const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+              if (pkg.dependencies?.["@frani-ai/auth-sdk"]) {
+                pkg.dependencies["@frani-ai/auth-sdk"] = version;
+                fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
+              }
+            }
+            console.log("Internal @frani-ai/auth-sdk deps set to", version);
+          '
+
+      - name: Publish packages (public)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != true }}
+        run: |
+          npm publish -w @frani-ai/auth-sdk --access public
+          npm publish -w @frani-ai/auth-react --access public
+          npm publish -w @frani-ai/auth-next --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dry run publish
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true }}
+        run: |
+          npm publish -w @frani-ai/auth-sdk --access public --dry-run
+          npm publish -w @frani-ai/auth-react --access public --dry-run
+          npm publish -w @frani-ai/auth-next --access public --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

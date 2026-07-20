@@ -1,0 +1,7 @@
+# Consumidores dos pacotes @frani-ai/auth-* (GitHub Packages)
+#
+# 1. PAT classic com scope `read:packages`
+# 2. export NODE_AUTH_TOKEN=ghp_xxx
+
+@frani-ai:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}

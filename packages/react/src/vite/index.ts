@@ -5,7 +5,7 @@ import {
   handleTokenExchangeRequest,
   readAuthConfigFromEnv,
   type EnvReader,
-} from '@frani/auth-sdk/server';
+} from '@frani-ai/auth-sdk/server';
 
 export interface FraniAuthVitePluginOptions {
   /** Prefixo das rotas proxy (default: /api) */

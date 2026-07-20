@@ -21,7 +21,7 @@ import {
   type VerifyOtpPayload,
   type Validate2faPayload,
   createSessionStorageAdapter,
-} from '@frani/auth-sdk';
+} from '@frani-ai/auth-sdk';
 
 export interface FraniAuthContextValue {
   client: FraniAuthClient;

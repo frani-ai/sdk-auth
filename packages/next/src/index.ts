@@ -4,7 +4,7 @@ import {
   readAuthConfigFromEnv,
   type EnvReader,
   type ServerAuthConfig,
-} from '@frani/auth-sdk/server';
+} from '@frani-ai/auth-sdk/server';
 
 export { readAuthConfigFromEnv, type EnvReader, type ServerAuthConfig };
 
