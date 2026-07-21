@@ -30,6 +30,12 @@ import {
   parseJwt,
 } from './pkce.js';
 import { createSessionStorageAdapter } from './storage.js';
+import {
+  hasAnyPermission,
+  hasPermission,
+  permissionsFromClaims,
+  requirePermission,
+} from './permissions.js';
 
 async function parseResponse<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -455,6 +461,36 @@ export class FraniAuthClient {
 
   parseJwt<T = Record<string, unknown>>(token: string): T | null {
     return parseJwt<T>(token);
+  }
+
+  /**
+   * Permissions RBAC do access token (`resource:action`).
+   * Preferência: claim JWT → userinfo em storage → [].
+   */
+  getPermissions(accessToken?: string): string[] {
+    const token = accessToken ?? this.storage.getTokens()?.access_token;
+    if (token) {
+      const claims = parseJwt<Record<string, unknown>>(token);
+      const fromJwt = permissionsFromClaims(claims);
+      if (fromJwt.length) return fromJwt;
+    }
+    const user = this.storage.getUser();
+    return user?.permissions ?? [];
+  }
+
+  hasPermission(resource: string, action: string, accessToken?: string): boolean {
+    return hasPermission(this.getPermissions(accessToken), resource, action);
+  }
+
+  hasAnyPermission(
+    checks: Array<{ resource: string; action: string }>,
+    accessToken?: string,
+  ): boolean {
+    return hasAnyPermission(this.getPermissions(accessToken), checks);
+  }
+
+  requirePermission(resource: string, action: string, accessToken?: string): void {
+    requirePermission(this.getPermissions(accessToken), resource, action);
   }
 
   private async resolveApiConfig(): Promise<

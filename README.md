@@ -212,6 +212,34 @@ await client.revokeToken();
 - Tenant (`tenantId` no fluxo OAuth e login)
 - SSO session check + consent
 - Token refresh, introspect, revoke, userinfo, profile
+- RBAC helpers (`hasPermission` / `getPermissions`) sobre claim `permissions` no formato `resource:action`
+
+## Permissions RBAC (`resource:action`)
+
+O access token (e o `/oauth/userinfo`) inclui `permissions: string[]` com entradas no formato `resource:action` (ex.: `posts:read`, `notifications:create`). A acção `manage` num resource cobre qualquer outra acção desse resource.
+
+```ts
+import {
+  FraniAuthClient,
+  hasPermission,
+  requirePermission,
+} from '@frani-ai/auth-sdk';
+
+const client = new FraniAuthClient({ /* ... */ });
+
+const perms = client.getPermissions();
+if (hasPermission(perms, 'posts', 'read')) {
+  // mostrar lista
+}
+
+if (client.hasPermission('notifications', 'create')) {
+  // pode criar inbox via API
+}
+
+client.requirePermission('tenants', 'read'); // lança FraniAuthError 403 se faltar
+```
+
+Helpers puros (sem I/O) também estão exportados: `hasPermission`, `hasAnyPermission`, `hasAllPermissions`, `requirePermission`, `permissionsFromClaims`.
 
 ## Desenvolvimento local
 

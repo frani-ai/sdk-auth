@@ -82,6 +82,9 @@ export function normalizeUserInfo(
     email_verified: Boolean(data.email_verified),
     name: String(data.name ?? ''),
     roles: Array.isArray(data.roles) ? (data.roles as string[]) : [],
+    permissions: Array.isArray(data.permissions)
+      ? (data.permissions as string[]).filter((p) => typeof p === 'string')
+      : undefined,
     tenantId: data.tenantId as string | undefined,
     avatarUrl: data.avatarUrl as string | undefined,
     totpEnabled: Boolean(data.totpEnabled),

@@ -44,6 +44,8 @@ export interface UserInfo {
   email_verified: boolean;
   name: string;
   roles: string[];
+  /** Claim RBAC `resource:action` emitido no access token. */
+  permissions?: string[];
   tenantId?: string;
   avatarUrl?: string;
   totpEnabled?: boolean;
@@ -66,6 +68,8 @@ export interface LoginResult {
   requires2fa?: boolean;
   requires2faSetup?: boolean;
   setupToken?: string;
+  /** Short-lived JWT for TOTP challenge; required by `/auth/2fa/validate`. */
+  challengeToken?: string;
   mustChangePassword?: boolean;
   passwordExpired?: boolean;
   passwordChangeToken?: string;
@@ -175,7 +179,7 @@ export interface VerifyOtpPayload extends OtpPayload {
 }
 
 export interface Validate2faPayload {
-  userId: string;
+  challengeToken: string;
   token: string;
   tenantId?: string;
 }

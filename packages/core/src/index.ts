@@ -12,3 +12,11 @@ export {
   createLocalStorageAdapter,
   createMemoryStorageAdapter,
 } from './storage.js';
+export {
+  hasPermission,
+  hasAnyPermission,
+  hasAllPermissions,
+  requirePermission,
+  permissionKey,
+  permissionsFromClaims,
+} from './permissions.js';
