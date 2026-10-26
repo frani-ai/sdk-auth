@@ -1,6 +1,6 @@
 {
   "name": "@frani-ai/auth-react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React hooks e provider para Frani Auth SDK",
   "type": "module",
   "main": "./dist/index.js",
@@ -38,7 +38,7 @@
     "react": ">=18.0.0"
   },
   "dependencies": {
-    "@frani-ai/auth-sdk": "0.1.0"
+    "@frani-ai/auth-sdk": "0.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

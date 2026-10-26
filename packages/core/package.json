@@ -1,7 +1,7 @@
 {
   "name": "@frani-ai/auth-sdk",
-  "version": "0.1.0",
-  "description": "SDK Frani Auth — OAuth PKCE, login, tenant e config de aplicação",
+  "version": "0.2.0",
+  "description": "SDK Bifrost Identity — OAuth PKCE, issuer /org/{slug}, tenant, Turnstile e provisionamento",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -36,6 +36,9 @@
   },
   "sideEffects": false,
   "license": "MIT",
+  "dependencies": {
+    "jose": "^5.10.0"
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.6.3"

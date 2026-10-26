@@ -8,11 +8,14 @@ import {
   type FraniAuthConfig,
   type LoginCredentials,
   type LoginResult,
+  type OpenIdConfiguration,
   type OtpPayload,
   type PkceState,
+  type PublicAuthConfig,
   type RegisterPayload,
   type ResetPasswordPayload,
   type ServerAuthConfig,
+  type SsoAccount,
   type SsoSession,
   type TokenIntrospection,
   type TokenSet,
@@ -36,6 +39,7 @@ import {
   permissionsFromClaims,
   requirePermission,
 } from './permissions.js';
+import { DEFAULT_OAUTH_SCOPES, resolveBifrostUrls } from './urls.js';
 
 async function parseResponse<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -53,11 +57,10 @@ async function parseResponse<T>(res: Response): Promise<T> {
 export class FraniAuthClient {
   private readonly tokenProxyUrl: string;
   private readonly refreshProxyUrl: string;
+  private readonly revokeProxyUrl: string;
   private readonly configProxyUrl: string;
-  private cachedPublicConfig: Pick<
-    FraniAuthConfig,
-    'authApiUrl' | 'oauthPublicUrl' | 'clientId' | 'redirectUri'
-  > | null = null;
+  private cachedPublicConfig: PublicAuthConfig | null = null;
+  private cachedDiscovery: OpenIdConfiguration | null = null;
 
   constructor(
     private readonly config: FraniAuthConfig,
@@ -65,6 +68,7 @@ export class FraniAuthClient {
   ) {
     this.tokenProxyUrl = config.tokenProxyUrl ?? '/api/oauth/token';
     this.refreshProxyUrl = config.refreshProxyUrl ?? '/api/oauth/refresh';
+    this.revokeProxyUrl = config.revokeProxyUrl ?? '';
     this.configProxyUrl = config.configProxyUrl ?? '/api/config';
   }
 
@@ -72,28 +76,33 @@ export class FraniAuthClient {
     return this.config;
   }
 
-  /** Config pública (clientId, redirectUri, authApiUrl) — via proxy ou env inline. */
-  async getPublicConfig(): Promise<
-    Pick<FraniAuthConfig, 'authApiUrl' | 'oauthPublicUrl' | 'clientId' | 'redirectUri'>
-  > {
+  /** Config pública (issuer, clientId, redirectUri) — via proxy ou env inline. */
+  async getPublicConfig(): Promise<PublicAuthConfig> {
     if (this.cachedPublicConfig) return this.cachedPublicConfig;
 
-    if (this.config.authApiUrl && this.config.clientId && this.config.redirectUri) {
-      this.cachedPublicConfig = {
-        authApiUrl: this.config.authApiUrl,
-        oauthPublicUrl: this.config.oauthPublicUrl,
-        clientId: this.config.clientId,
-        redirectUri: this.config.redirectUri,
-      };
+    if (
+      this.config.clientId &&
+      this.config.redirectUri &&
+      (this.config.issuer || this.config.authApiUrl || this.config.portalUrl)
+    ) {
+      this.cachedPublicConfig = publicConfigFromResolved(this.config);
       return this.cachedPublicConfig;
     }
 
     const res = await fetch(this.configProxyUrl, { cache: 'no-store' });
-    this.cachedPublicConfig = await parseResponse(res);
-    return this.cachedPublicConfig!;
+    this.cachedPublicConfig = await parseResponse<PublicAuthConfig>(res);
+    return this.cachedPublicConfig;
   }
 
-  /** Metadados da aplicação (login UI, tenant, 2FA, etc.). */
+  async getDiscovery(): Promise<OpenIdConfiguration> {
+    if (this.cachedDiscovery) return this.cachedDiscovery;
+    const cfg = await this.resolveApiConfig();
+    const res = await fetch(`${cfg.issuer}/.well-known/openid-configuration`, { cache: 'no-store' });
+    this.cachedDiscovery = await parseResponse<OpenIdConfiguration>(res);
+    return this.cachedDiscovery;
+  }
+
+  /** Metadados da aplicação (login UI, tenant, 2FA, Turnstile, locale). */
   async getAppConfig(clientSecret?: string): Promise<AppConfig> {
     const cfg = await this.resolveApiConfig();
     const params = new URLSearchParams({ client_id: cfg.clientId });
@@ -115,18 +124,21 @@ export class FraniAuthClient {
   async getAuthorizeUrl(codeChallenge: string, state?: string, tenantId?: string): Promise<string> {
     const cfg = await this.resolveApiConfig();
     const oauthState = state ?? this.generateState();
-    const authorizeBase = (this.config.oauthPublicUrl ?? cfg.oauthPublicUrl ?? cfg.authApiUrl).replace(
-      /\/$/,
-      '',
-    );
     return buildAuthorizeUrl(
       {
-        ...cfg,
-        authApiUrl: authorizeBase,
-        scopes: this.config.scopes,
+        issuer: cfg.issuer,
+        clientId: cfg.clientId,
+        redirectUri: cfg.redirectUri,
+        scopes: this.config.scopes ?? DEFAULT_OAUTH_SCOPES,
         tenantId: tenantId ?? this.config.tenantId,
+        language: this.config.language,
       },
-      { state: oauthState, codeChallenge, tenantId: tenantId ?? this.config.tenantId },
+      {
+        state: oauthState,
+        codeChallenge,
+        tenantId: tenantId ?? this.config.tenantId,
+        language: this.config.language,
+      },
     );
   }
 
@@ -184,8 +196,10 @@ export class FraniAuthClient {
     const token = accessToken ?? this.storage.getTokens()?.access_token;
     if (!token) throw new FraniAuthError('Access token em falta');
 
+    const discovery = await this.getDiscovery().catch(() => null);
     const cfg = await this.resolveApiConfig();
-    const res = await fetch(`${cfg.authApiUrl}/oauth/userinfo`, {
+    const url = discovery?.userinfo_endpoint ?? `${cfg.issuer}/oauth/userinfo`;
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await parseResponse<Record<string, unknown>>(res);
@@ -196,8 +210,10 @@ export class FraniAuthClient {
     const token = accessToken ?? this.storage.getTokens()?.access_token;
     if (!token) throw new FraniAuthError('Access token em falta');
 
+    const discovery = await this.getDiscovery().catch(() => null);
     const cfg = await this.resolveApiConfig();
-    const res = await fetch(`${cfg.authApiUrl}/oauth/profile`, {
+    const url = discovery?.profile_endpoint ?? `${cfg.issuer}/oauth/profile`;
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await parseResponse<Record<string, unknown>>(res);
@@ -217,18 +233,13 @@ export class FraniAuthClient {
       });
       tokens = await parseResponse<TokenSet>(res);
     } else {
-      const cfg = await this.resolveApiConfig();
-      const res = await fetch(`${cfg.authApiUrl}/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          refresh_token: token,
-          client_id: cfg.clientId,
-          ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
-        }),
-      });
-      tokens = await parseResponse<TokenSet>(res);
+      tokens = await refreshTokensOnServer(
+        {
+          ...this.config,
+          clientSecret: this.config.clientSecret ?? '',
+        },
+        token,
+      );
     }
 
     const merged: TokenSet = {
@@ -243,11 +254,17 @@ export class FraniAuthClient {
     const value = token ?? this.storage.getTokens()?.access_token;
     if (!value) throw new FraniAuthError('Token em falta');
 
+    const discovery = await this.getDiscovery().catch(() => null);
     const cfg = await this.resolveApiConfig();
-    const res = await fetch(`${cfg.authApiUrl}/oauth/introspect`, {
+    const url = discovery?.introspection_endpoint ?? `${cfg.issuer}/oauth/introspect`;
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: value }),
+      body: JSON.stringify({
+        token: value,
+        client_id: cfg.clientId,
+        ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
+      }),
     });
     return parseResponse<TokenIntrospection>(res);
   }
@@ -256,11 +273,28 @@ export class FraniAuthClient {
     const value = token ?? this.storage.getTokens()?.access_token;
     if (!value) return;
 
+    if (this.revokeProxyUrl) {
+      const res = await fetch(this.revokeProxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: value }),
+      });
+      if (!res.ok) await parseResponse(res);
+      this.clearSession();
+      return;
+    }
+
+    const discovery = await this.getDiscovery().catch(() => null);
     const cfg = await this.resolveApiConfig();
-    const res = await fetch(`${cfg.authApiUrl}/oauth/revoke`, {
+    const url = discovery?.revocation_endpoint ?? `${cfg.issuer}/oauth/revoke`;
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: value }),
+      body: JSON.stringify({
+        token: value,
+        client_id: cfg.clientId,
+        ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
+      }),
     });
     if (!res.ok) await parseResponse(res);
     this.clearSession();
@@ -276,6 +310,7 @@ export class FraniAuthClient {
       password: payload.password,
       tenantId: payload.tenantId ?? this.config.tenantId,
       redirectUri: payload.redirectUri ?? this.config.redirectUri,
+      ...(payload.turnstileToken ? { turnstileToken: payload.turnstileToken } : {}),
     });
   }
 
@@ -416,6 +451,37 @@ export class FraniAuthClient {
     return parseResponse<SsoSession>(res);
   }
 
+  async listSsoAccounts(): Promise<{ accounts: SsoAccount[] }> {
+    const cfg = await this.resolveApiConfig();
+    const params = new URLSearchParams({ client_id: cfg.clientId });
+    const res = await fetch(`${cfg.authApiUrl}/auth/sso/accounts?${params.toString()}`, {
+      credentials: 'include',
+    });
+    return parseResponse(res);
+  }
+
+  async selectSsoAccount(sessionId: string): Promise<{ success: boolean }> {
+    const cfg = await this.resolveApiConfig();
+    const res = await fetch(`${cfg.authApiUrl}/auth/sso/select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ sessionId }),
+    });
+    return parseResponse(res);
+  }
+
+  async removeSsoAccount(sessionId: string): Promise<{ success: boolean }> {
+    const cfg = await this.resolveApiConfig();
+    const res = await fetch(`${cfg.authApiUrl}/auth/sso/accounts/remove`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ sessionId }),
+    });
+    return parseResponse(res);
+  }
+
   async ssoLogout(): Promise<{ success: boolean }> {
     const cfg = await this.resolveApiConfig();
     const res = await fetch(`${cfg.authApiUrl}/auth/sso/logout`, {
@@ -431,6 +497,7 @@ export class FraniAuthClient {
     const tokens: TokenSet = {
       access_token: result.access_token,
       refresh_token: result.refresh_token,
+      id_token: result.id_token,
       expires_in: result.expires_in,
     };
     this.storage.setTokens(tokens);
@@ -493,24 +560,15 @@ export class FraniAuthClient {
     requirePermission(this.getPermissions(accessToken), resource, action);
   }
 
-  private async resolveApiConfig(): Promise<
-    Pick<FraniAuthConfig, 'authApiUrl' | 'oauthPublicUrl' | 'clientId' | 'redirectUri'>
-  > {
-    if (this.config.authApiUrl && this.config.clientId && this.config.redirectUri) {
-      return {
-        authApiUrl: this.config.authApiUrl.replace(/\/$/, ''),
-        oauthPublicUrl: this.config.oauthPublicUrl?.replace(/\/$/, ''),
-        clientId: this.config.clientId,
-        redirectUri: this.config.redirectUri,
-      };
+  private async resolveApiConfig(): Promise<PublicAuthConfig> {
+    if (
+      this.config.clientId &&
+      this.config.redirectUri &&
+      (this.config.issuer || this.config.authApiUrl || this.config.portalUrl)
+    ) {
+      return publicConfigFromResolved(this.config);
     }
-    const publicCfg = await this.getPublicConfig();
-    return {
-      authApiUrl: publicCfg.authApiUrl.replace(/\/$/, ''),
-      oauthPublicUrl: publicCfg.oauthPublicUrl?.replace(/\/$/, ''),
-      clientId: publicCfg.clientId,
-      redirectUri: publicCfg.redirectUri,
-    };
+    return this.getPublicConfig();
   }
 
   private async authPost<T>(path: string, body: object): Promise<T> {
@@ -525,13 +583,49 @@ export class FraniAuthClient {
   }
 }
 
-/** Troca authorization code por tokens — usar no servidor (Route Handler / Vite middleware). */
+function publicConfigFromResolved(config: FraniAuthConfig): PublicAuthConfig {
+  const urls = resolveBifrostUrls(config);
+  return {
+    issuer: urls.issuer,
+    portalUrl: urls.portalUrl,
+    authApiUrl: urls.authApiUrl,
+    oauthPublicUrl: config.oauthPublicUrl,
+    clientId: config.clientId,
+    redirectUri: config.redirectUri,
+    tenantId: config.tenantId,
+    orgSlug: config.orgSlug,
+    language: config.language,
+  };
+}
+
+function oauthTokenUrl(config: ServerAuthConfig): string {
+  const urls = resolveBifrostUrls(config);
+  return `${urls.issuer}/oauth/token`;
+}
+
+function oauthRevokeUrl(config: ServerAuthConfig): string {
+  const urls = resolveBifrostUrls(config);
+  return `${urls.issuer}/oauth/revoke`;
+}
+
+function throwIfTokenError(res: Response, body: unknown, fallback: string): void {
+  if (res.ok) return;
+  throw new FraniAuthError(
+    (body as { message?: string; error_description?: string }).message ??
+      (body as { error_description?: string }).error_description ??
+      fallback,
+    res.status,
+    body,
+  );
+}
+
+/** Troca authorization code por tokens — usar no servidor (Route Handler / Vite middleware). Body JSON. */
 export async function exchangeCodeOnServer(
   config: ServerAuthConfig,
   code: string,
   codeVerifier: string,
 ): Promise<TokenSet> {
-  const res = await fetch(`${config.authApiUrl.replace(/\/$/, '')}/oauth/token`, {
+  const res = await fetch(oauthTokenUrl(config), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -545,24 +639,57 @@ export async function exchangeCodeOnServer(
   });
 
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new FraniAuthError(
-      (body as { message?: string; error_description?: string }).message ??
-        (body as { error_description?: string }).error_description ??
-        'Falha ao trocar code por tokens',
-      res.status,
-      body,
-    );
-  }
+  throwIfTokenError(res, body, 'Falha ao trocar code por tokens');
   return body as TokenSet;
 }
 
-export function getPublicConfigFromServer(config: ServerAuthConfig) {
+export async function refreshTokensOnServer(
+  config: ServerAuthConfig,
+  refreshToken: string,
+): Promise<TokenSet> {
+  const res = await fetch(oauthTokenUrl(config), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+    }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  throwIfTokenError(res, body, 'Falha ao renovar tokens');
+  return body as TokenSet;
+}
+
+export async function revokeTokenOnServer(config: ServerAuthConfig, token: string): Promise<void> {
+  const res = await fetch(oauthRevokeUrl(config), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      token,
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throwIfTokenError(res, body, 'Falha ao revogar token');
+  }
+}
+
+export function getPublicConfigFromServer(config: ServerAuthConfig): PublicAuthConfig {
+  const urls = resolveBifrostUrls(config);
   return {
-    authApiUrl: config.authApiUrl,
+    issuer: urls.issuer,
+    portalUrl: urls.portalUrl,
+    authApiUrl: urls.authApiUrl,
     ...(config.oauthPublicUrl ? { oauthPublicUrl: config.oauthPublicUrl } : {}),
     clientId: config.clientId,
     redirectUri: config.redirectUri,
     tenantId: config.tenantId,
+    orgSlug: config.orgSlug,
+    language: config.language,
   };
 }

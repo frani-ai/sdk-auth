@@ -53,14 +53,22 @@ export function parseJwt<T = Record<string, unknown>>(token: string): T | null {
 }
 
 export function buildAuthorizeUrl(
-  config: { authApiUrl: string; clientId: string; redirectUri: string; scopes?: string; tenantId?: string },
-  params: { state: string; codeChallenge: string; tenantId?: string },
+  config: {
+    issuer?: string;
+    authApiUrl?: string;
+    clientId: string;
+    redirectUri: string;
+    scopes?: string;
+    tenantId?: string;
+    language?: string;
+  },
+  params: { state: string; codeChallenge: string; tenantId?: string; language?: string },
 ): string {
   const search = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: 'code',
-    scope: config.scopes ?? 'openid profile email',
+    scope: config.scopes ?? 'openid profile email offline_access',
     state: params.state,
     code_challenge: params.codeChallenge,
     code_challenge_method: 'S256',
@@ -69,7 +77,13 @@ export function buildAuthorizeUrl(
   const tenant = params.tenantId ?? config.tenantId;
   if (tenant) search.set('tenant', tenant);
 
-  const base = config.authApiUrl.replace(/\/$/, '');
+  const language = params.language ?? config.language;
+  if (language) {
+    search.set('language', language);
+    search.set('ui_locales', language);
+  }
+
+  const base = (config.issuer ?? config.authApiUrl ?? '').replace(/\/$/, '');
   return `${base}/oauth/authorize?${search.toString()}`;
 }
 
@@ -86,7 +100,9 @@ export function normalizeUserInfo(
       ? (data.permissions as string[]).filter((p) => typeof p === 'string')
       : undefined,
     tenantId: data.tenantId as string | undefined,
-    avatarUrl: data.avatarUrl as string | undefined,
+    applicationId: (data.applicationId ?? data.clientId) as string | undefined,
+    avatarUrl: (data.avatarUrl ?? data.picture) as string | undefined,
+    picture: (data.picture ?? data.avatarUrl) as string | undefined,
     totpEnabled: Boolean(data.totpEnabled),
     updated_at: data.updated_at as number | undefined,
     fullName: (data.fullName ?? data.full_name) as string | undefined,

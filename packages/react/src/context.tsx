@@ -66,7 +66,19 @@ export function FraniAuthProvider({
   const client = useMemo(
     () => new FraniAuthClient({ ...config, tenantId: initialTenantId ?? config.tenantId }, storage ?? createSessionStorageAdapter()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [config.authApiUrl, config.clientId, config.redirectUri, config.tokenProxyUrl, config.refreshProxyUrl, config.configProxyUrl],
+    [
+      config.issuer,
+      config.portalUrl,
+      config.orgSlug,
+      config.authApiUrl,
+      config.clientId,
+      config.redirectUri,
+      config.language,
+      config.tokenProxyUrl,
+      config.refreshProxyUrl,
+      config.revokeProxyUrl,
+      config.configProxyUrl,
+    ],
   );
 
   const [tenantId, setTenantId] = useState<string | undefined>(initialTenantId ?? config.tenantId);
@@ -284,5 +296,13 @@ export function useFraniTenant() {
     tenantId,
     setTenantId,
     tenantEnabled: appConfig?.tenantEnabled ?? false,
+  };
+}
+
+export function useFraniTurnstile() {
+  const { appConfig } = useFraniAuth();
+  return {
+    enabled: appConfig?.turnstileEnabled ?? false,
+    siteKey: appConfig?.turnstileSiteKey,
   };
 }

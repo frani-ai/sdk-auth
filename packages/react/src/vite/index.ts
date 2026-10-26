@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import {
   handlePublicConfigRequest,
+  handleRefreshTokenRequest,
+  handleRevokeTokenRequest,
   handleTokenExchangeRequest,
   readAuthConfigFromEnv,
   type EnvReader,
@@ -15,13 +17,15 @@ export interface FraniAuthVitePluginOptions {
 }
 
 /**
- * Plugin Vite — expõe /api/config e /api/oauth/token em dev
+ * Plugin Vite — expõe /api/config, /api/oauth/token, /refresh e /revoke em dev
  * para trocar tokens sem expor client_secret no browser.
  */
 export function franiAuthVitePlugin(options: FraniAuthVitePluginOptions = {}): Plugin {
   const apiPrefix = options.apiPrefix ?? '/api';
   const configPath = `${apiPrefix}/config`;
   const tokenPath = `${apiPrefix}/oauth/token`;
+  const refreshPath = `${apiPrefix}/oauth/refresh`;
+  const revokePath = `${apiPrefix}/oauth/revoke`;
 
   return {
     name: 'frani-auth-vite',
@@ -42,19 +46,27 @@ export function franiAuthVitePlugin(options: FraniAuthVitePluginOptions = {}): P
           return;
         }
 
-        if (url === tokenPath && req.method === 'POST') {
+        if (
+          req.method === 'POST' &&
+          (url === tokenPath || url === refreshPath || url === revokePath)
+        ) {
           let raw = '';
           req.on('data', (chunk: Buffer) => {
             raw += chunk.toString('utf8');
           });
           req.on('end', async () => {
             try {
-              const request = new Request(`http://localhost${tokenPath}`, {
+              const request = new Request(`http://localhost${url}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: raw,
               });
-              const response = await handleTokenExchangeRequest(request, config);
+              const response =
+                url === refreshPath
+                  ? await handleRefreshTokenRequest(request, config)
+                  : url === revokePath
+                    ? await handleRevokeTokenRequest(request, config)
+                    : await handleTokenExchangeRequest(request, config);
               const body = await response.text();
               res.statusCode = response.status;
               res.setHeader('Content-Type', 'application/json');
