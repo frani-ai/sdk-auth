@@ -1,6 +1,6 @@
 {
   "name": "@frani-ai/auth-nest",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "NestJS guards e decorators para validar JWT Bifrost e autorizar rotas (permissions + roles)",
   "type": "module",
   "main": "./dist/index.js",
@@ -36,7 +36,7 @@
     "reflect-metadata": ">=0.1.13"
   },
   "dependencies": {
-    "@frani-ai/auth-sdk": "0.2.0"
+    "@frani-ai/auth-sdk": "0.3.0"
   },
   "devDependencies": {
     "@nestjs/common": "^10.4.15",

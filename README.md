@@ -363,5 +363,10 @@ npm run build
 3. A tag dispara **Publish** dos packages (`auth-sdk`, `auth-react`, `auth-next`, `auth-nest`)
 
 ```bash
-npm run version:patch   # ou version:minor / version:major
+npm run version:patch   # 0.2.0 → 0.2.1
+npm run version:minor   # 0.2.0 → 0.3.0
+npm run version:major   # 0.2.0 → 1.0.0
+# ou: npm run version:bump -- patch
 ```
+
+O script `scripts/bump-version.mjs` actualiza a versão em todos os packages (`auth-sdk`, `auth-react`, `auth-next`, `auth-nest`), no root, no `package-lock.json` e move a secção `[Unreleased]` do `CHANGELOG.md` para a nova versão.

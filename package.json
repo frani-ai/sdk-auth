@@ -1,6 +1,6 @@
 {
   "name": "@frani-ai/sdk-auth",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -9,6 +9,10 @@
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present",
+    "version:patch": "node scripts/bump-version.mjs patch",
+    "version:minor": "node scripts/bump-version.mjs minor",
+    "version:major": "node scripts/bump-version.mjs major",
+    "version:bump": "node scripts/bump-version.mjs",
     "publish:packages": "npm publish -w @frani-ai/auth-sdk && npm publish -w @frani-ai/auth-react && npm publish -w @frani-ai/auth-next && npm publish -w @frani-ai/auth-nest"
   },
   "devDependencies": {
