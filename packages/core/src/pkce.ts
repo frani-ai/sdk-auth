@@ -62,7 +62,17 @@ export function buildAuthorizeUrl(
     tenantId?: string;
     language?: string;
   },
-  params: { state: string; codeChallenge: string; tenantId?: string; language?: string },
+  params: {
+    state: string;
+    codeChallenge: string;
+    tenantId?: string;
+    language?: string;
+    /** Space-separated ACR values (Bifrost supports 1 | 2 | 3). */
+    acrValues?: string;
+    prompt?: string;
+    loginHint?: string;
+    maxAge?: number;
+  },
 ): string {
   const search = new URLSearchParams({
     client_id: config.clientId,
@@ -82,6 +92,11 @@ export function buildAuthorizeUrl(
     search.set('language', language);
     search.set('ui_locales', language);
   }
+
+  if (params.acrValues) search.set('acr_values', params.acrValues);
+  if (params.prompt) search.set('prompt', params.prompt);
+  if (params.loginHint) search.set('login_hint', params.loginHint);
+  if (typeof params.maxAge === 'number') search.set('max_age', String(params.maxAge));
 
   const base = (config.issuer ?? config.authApiUrl ?? '').replace(/\/$/, '');
   return `${base}/oauth/authorize?${search.toString()}`;
@@ -104,6 +119,14 @@ export function normalizeUserInfo(
     avatarUrl: (data.avatarUrl ?? data.picture) as string | undefined,
     picture: (data.picture ?? data.avatarUrl) as string | undefined,
     totpEnabled: Boolean(data.totpEnabled),
+    recoveryCodesRemaining:
+      typeof data.recoveryCodesRemaining === 'number'
+        ? data.recoveryCodesRemaining
+        : undefined,
+    acr: data.acr as import('./types.js').UserInfo['acr'],
+    amr: Array.isArray(data.amr)
+      ? (data.amr as unknown[]).filter((v): v is string => typeof v === 'string')
+      : undefined,
     updated_at: data.updated_at as number | undefined,
     fullName: (data.fullName ?? data.full_name) as string | undefined,
     gender: data.gender as string | undefined,

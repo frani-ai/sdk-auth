@@ -20,10 +20,11 @@ Fale **só com o portal**. Não chame o host Nest, IP interno nem o prefixo `/au
 
 | Pacote | Descrição |
 |--------|-----------|
-| `@frani-ai/auth-sdk` | Cliente HTTP, PKCE, login, tenant, tokens |
-| `@frani-ai/auth-sdk/server` | Token exchange, JWKS, provisionamento (`sk_…`) |
+| `@frani-ai/auth-sdk` | Cliente HTTP, PKCE, login, tenant, tokens, helpers de permission/role |
+| `@frani-ai/auth-sdk/server` | Token exchange, JWKS, authorize, provisionamento (`sk_…`) |
 | `@frani-ai/auth-react` | Provider React + hooks |
 | `@frani-ai/auth-next` | Route handlers App Router |
+| `@frani-ai/auth-nest` | Guards/decorators NestJS (JWT + `@Scopes` / `@Roles`) |
 | `@frani-ai/auth-react/vite` | Plugin Vite (proxy de token no dev) |
 
 ## Instalação (GitHub Packages)
@@ -38,6 +39,8 @@ export NODE_AUTH_TOKEN=ghp_seu_token
 npm install @frani-ai/auth-sdk @frani-ai/auth-react
 # Next.js
 npm install @frani-ai/auth-next
+# NestJS (API backend)
+npm install @frani-ai/auth-nest
 ```
 
 ## Variáveis de ambiente
@@ -281,23 +284,69 @@ Se o slug já existir, o tenant é reutilizado. E-mail duplicado nesse tenant �
 - Idioma (`language` / `ui_locales`)
 - SSO (session, accounts, consent)
 - Token refresh, introspect, revoke, userinfo, profile (JSON)
+- Clients **confidential** (com secret) e **public** (`BIFROST_CLIENT_TYPE=public`, só PKCE)
+- `acr_values` no authorize; claims `acr` / `amr` no token
 - Provisionamento de tenant + utilizador (`X-Api-Key`)
-- RBAC (`hasPermission` / `getPermissions`) sobre claim `permissions` (`resource:action`)
+- RBAC: permissions (`resource:action`) **e** roles
+- NestJS: `@frani-ai/auth-nest` (AuthGuard + `@Scopes` / `@Roles`)
 
-## Permissions RBAC (`resource:action`)
+## Permissions e roles
 
-O access token (e o `/oauth/userinfo`) inclui `permissions: string[]`. A acção `manage` num resource cobre qualquer outra acção desse resource.
+O access token inclui `permissions: string[]` (`resource:action`; `manage` cobre o resource) e `roles: string[]`.
 
 ```ts
-import { FraniAuthClient, hasPermission, requirePermission } from '@frani-ai/auth-sdk';
+import {
+  FraniAuthClient,
+  hasPermission,
+  requirePermission,
+  hasRole,
+  evaluateAuthz,
+} from '@frani-ai/auth-sdk';
 
 const client = new FraniAuthClient({ /* ... */ });
+if (client.hasPermission('notifications', 'create')) { /* ... */ }
+client.requirePermission('tenants', 'read');
 
-if (client.hasPermission('notifications', 'create')) {
-  // pode criar
+evaluateAuthz(
+  { permissions: ['posts:read'], roles: ['editor'] },
+  { resource: 'posts', scopes: ['read'], roles: ['editor'] },
+);
+```
+
+### NestJS (proteger API)
+
+```ts
+import { BifrostAuthModule, Resource, Scopes, Roles, Public, CurrentUser } from '@frani-ai/auth-nest';
+
+BifrostAuthModule.register({
+  issuer: process.env.BIFROST_ISSUER,
+  clientId: process.env.BIFROST_CLIENT_ID!,
+  policyEnforcement: 'permissive',
+});
+
+@Controller('posts')
+@Resource('posts')
+export class PostsController {
+  @Get()
+  @Public()
+  list() {}
+
+  @Post()
+  @Scopes('create')
+  @Roles({ roles: ['admin'], mode: 'any' })
+  create(@CurrentUser() user: { sub: string }) {
+    return { sub: user.sub };
+  }
 }
+```
 
-client.requirePermission('tenants', 'read'); // lança FraniAuthError 403 se faltar
+Sem Nest, no middleware:
+
+```ts
+import { verifyAccessToken, assertAuthz } from '@frani-ai/auth-sdk/server';
+
+const user = await verifyAccessToken(bearer, { issuer, clientId });
+assertAuthz(user, { resource: 'posts', scopes: ['read'], roles: ['admin'] });
 ```
 
 ## Desenvolvimento local
@@ -311,7 +360,7 @@ npm run build
 
 1. Actions → **Release** → Run workflow
 2. Escolhe `patch` / `minor` / `major`
-3. A tag dispara **Publish** dos três packages
+3. A tag dispara **Publish** dos packages (`auth-sdk`, `auth-react`, `auth-next`, `auth-nest`)
 
 ```bash
 npm run version:patch   # ou version:minor / version:major

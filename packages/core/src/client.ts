@@ -39,6 +39,7 @@ import {
   permissionsFromClaims,
   requirePermission,
 } from './permissions.js';
+import { hasAnyRole, hasRole, requireRole, rolesFromClaims } from './roles.js';
 import { DEFAULT_OAUTH_SCOPES, resolveBifrostUrls } from './urls.js';
 
 async function parseResponse<T>(res: Response): Promise<T> {
@@ -560,6 +561,28 @@ export class FraniAuthClient {
     requirePermission(this.getPermissions(accessToken), resource, action);
   }
 
+  getRoles(accessToken?: string): string[] {
+    const token = accessToken ?? this.storage.getTokens()?.access_token;
+    if (token) {
+      const claims = parseJwt<Record<string, unknown>>(token);
+      const fromJwt = rolesFromClaims(claims);
+      if (fromJwt.length) return fromJwt;
+    }
+    return this.storage.getUser()?.roles ?? [];
+  }
+
+  hasRole(role: string, accessToken?: string): boolean {
+    return hasRole(this.getRoles(accessToken), role);
+  }
+
+  hasAnyRole(roles: string[], accessToken?: string): boolean {
+    return hasAnyRole(this.getRoles(accessToken), roles);
+  }
+
+  requireRole(role: string, accessToken?: string): void {
+    requireRole(this.getRoles(accessToken), role);
+  }
+
   private async resolveApiConfig(): Promise<PublicAuthConfig> {
     if (
       this.config.clientId &&
@@ -619,6 +642,21 @@ function throwIfTokenError(res: Response, body: unknown, fallback: string): void
   );
 }
 
+function isPublicClient(config: ServerAuthConfig): boolean {
+  return config.clientType === 'public';
+}
+
+function clientAuthFields(config: ServerAuthConfig): Record<string, string> {
+  if (isPublicClient(config)) return {};
+  if (!config.clientSecret) {
+    throw new FraniAuthError(
+      'CLIENT_SECRET obrigatório para client confidential (ou defina clientType: "public")',
+      500,
+    );
+  }
+  return { client_secret: config.clientSecret };
+}
+
 /** Troca authorization code por tokens — usar no servidor (Route Handler / Vite middleware). Body JSON. */
 export async function exchangeCodeOnServer(
   config: ServerAuthConfig,
@@ -633,7 +671,7 @@ export async function exchangeCodeOnServer(
       code,
       redirect_uri: config.redirectUri,
       client_id: config.clientId,
-      client_secret: config.clientSecret,
+      ...clientAuthFields(config),
       code_verifier: codeVerifier,
     }),
   });
@@ -654,7 +692,7 @@ export async function refreshTokensOnServer(
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: config.clientId,
-      client_secret: config.clientSecret,
+      ...clientAuthFields(config),
     }),
   });
 
@@ -670,7 +708,7 @@ export async function revokeTokenOnServer(config: ServerAuthConfig, token: strin
     body: JSON.stringify({
       token,
       client_id: config.clientId,
-      client_secret: config.clientSecret,
+      ...clientAuthFields(config),
     }),
   });
   if (!res.ok) {

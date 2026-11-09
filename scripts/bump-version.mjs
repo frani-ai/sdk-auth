@@ -34,7 +34,7 @@ function writeJson(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-const packageDirs = ['packages/core', 'packages/react', 'packages/next'];
+const packageDirs = ['packages/core', 'packages/react', 'packages/next', 'packages/nest'];
 const corePath = resolve(root, 'packages/core/package.json');
 const core = readJson(corePath);
 const next = bumpSemver(core.version, bump);

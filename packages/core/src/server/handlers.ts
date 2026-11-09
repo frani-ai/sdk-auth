@@ -54,9 +54,12 @@ export function readAuthConfigFromEnv(env: EnvReader = DEFAULT_ENV): ServerAuthC
     first(env, ['BIFROST_CLIENT_ID', 'CLIENT_ID', 'NEXT_PUBLIC_CLIENT_ID', 'VITE_CLIENT_ID', 'NEXT_PUBLIC_BIFROST_CLIENT_ID', 'VITE_BIFROST_CLIENT_ID']) ??
     '';
 
-  const clientSecret =
-    first(env, ['BIFROST_CLIENT_SECRET', 'CLIENT_SECRET']) ??
-    '';
+  const clientSecret = first(env, ['BIFROST_CLIENT_SECRET', 'CLIENT_SECRET']);
+  const clientTypeRaw = first(env, ['BIFROST_CLIENT_TYPE', 'CLIENT_TYPE'])?.toLowerCase();
+  const clientType =
+    clientTypeRaw === 'public' || clientTypeRaw === 'confidential'
+      ? clientTypeRaw
+      : undefined;
 
   const redirectUri =
     first(env, [
@@ -99,12 +102,30 @@ export function readAuthConfigFromEnv(env: EnvReader = DEFAULT_ENV): ServerAuthC
     ...(authApiUrl ? { authApiUrl } : {}),
     ...(oauthPublicUrl ? { oauthPublicUrl } : {}),
     clientId,
-    clientSecret,
+    ...(clientSecret ? { clientSecret } : {}),
+    ...(clientType ? { clientType } : {}),
     redirectUri,
     tenantId,
     language,
     apiKey,
   };
+}
+
+function assertClientConfigured(config: ServerAuthConfig): Response | null {
+  if (!config.clientId) {
+    return Response.json({ message: 'CLIENT_ID não configurado no servidor' }, { status: 500 });
+  }
+  if (config.clientType === 'public') return null;
+  if (!config.clientSecret) {
+    return Response.json(
+      {
+        message:
+          'CLIENT_SECRET não configurado (client confidential). Defina BIFROST_CLIENT_TYPE=public para clients públicos.',
+      },
+      { status: 500 },
+    );
+  }
+  return null;
 }
 
 function errorResponse(err: unknown, fallback: string): Response {
@@ -130,12 +151,8 @@ export async function handleTokenExchangeRequest(
     return Response.json({ message: 'code e codeVerifier são obrigatórios' }, { status: 400 });
   }
 
-  if (!config.clientId || !config.clientSecret) {
-    return Response.json(
-      { message: 'CLIENT_ID / CLIENT_SECRET não configurados no servidor' },
-      { status: 500 },
-    );
-  }
+  const configError = assertClientConfigured(config);
+  if (configError) return configError;
 
   try {
     const tokens = await exchangeCodeOnServer(config, code, codeVerifier);
@@ -154,12 +171,8 @@ export async function handleRefreshTokenRequest(
   if (!refreshToken) {
     return Response.json({ message: 'refreshToken é obrigatório' }, { status: 400 });
   }
-  if (!config.clientId || !config.clientSecret) {
-    return Response.json(
-      { message: 'CLIENT_ID / CLIENT_SECRET não configurados no servidor' },
-      { status: 500 },
-    );
-  }
+  const configError = assertClientConfigured(config);
+  if (configError) return configError;
   try {
     const tokens = await refreshTokensOnServer(config, refreshToken);
     return Response.json(tokens);

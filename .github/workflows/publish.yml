@@ -74,6 +74,7 @@ jobs:
           npm publish -w @frani-ai/auth-sdk --access public
           npm publish -w @frani-ai/auth-react --access public
           npm publish -w @frani-ai/auth-next --access public
+          npm publish -w @frani-ai/auth-nest --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -83,5 +84,6 @@ jobs:
           npm publish -w @frani-ai/auth-sdk --access public --dry-run
           npm publish -w @frani-ai/auth-react --access public --dry-run
           npm publish -w @frani-ai/auth-next --access public --dry-run
+          npm publish -w @frani-ai/auth-nest --access public --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,10 @@
-export type AuthMethod = 'password' | 'google' | 'microsoft' | 'otp';
+export type AuthMethod = 'password' | 'google' | 'microsoft' | 'otp' | 'saml' | 'webauthn';
+
+/** OAuth client confidentiality (Bifrost G1). Public clients must not send client_secret. */
+export type OAuthClientType = 'confidential' | 'public';
+
+/** ACR levels supported by Bifrost (`acr_values_supported`: 1 | 2 | 3). */
+export type AcrLevel = '1' | '2' | '3';
 
 export type AppLocale = 'pt-BR' | 'en';
 
@@ -70,6 +76,12 @@ export interface UserInfo {
   avatarUrl?: string;
   picture?: string;
   totpEnabled?: boolean;
+  /** Remaining unused MFA recovery codes (profile/me). */
+  recoveryCodesRemaining?: number;
+  /** Authentication Context Class Reference from the session/token. */
+  acr?: AcrLevel | string;
+  /** Authentication Methods References (e.g. pwd, otp+mfa, webauthn). */
+  amr?: string[];
   updated_at?: number;
   fullName?: string;
   gender?: string;
@@ -96,6 +108,10 @@ export interface AccessTokenClaims {
   aud?: string | string[];
   exp?: number;
   iat?: number;
+  /** Authentication Context Class Reference. */
+  acr?: AcrLevel | string;
+  /** Authentication Methods References. */
+  amr?: string[];
 }
 
 export interface OpenIdConfiguration {
@@ -113,6 +129,8 @@ export interface OpenIdConfiguration {
   id_token_signing_alg_values_supported: string[];
   scopes_supported: string[];
   code_challenge_methods_supported: string[];
+  acr_values_supported?: string[];
+  end_session_endpoint?: string;
   organization?: { slug: string; name: string };
 }
 
@@ -225,7 +243,13 @@ export interface ServerAuthConfig {
   authApiUrl?: string;
   oauthPublicUrl?: string;
   clientId: string;
-  clientSecret: string;
+  /**
+   * Obrigatório para clients `confidential`.
+   * Omitir (e definir `clientType: 'public'`) para SPAs / public clients (só PKCE).
+   */
+  clientSecret?: string;
+  /** Default `confidential`. Public clients must not send client_secret. */
+  clientType?: OAuthClientType;
   redirectUri: string;
   tenantId?: string;
   language?: string;
